@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SupplierCompliance dApp</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"
+        onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js'"></script>
+<style>
+  :root{
+    --ink:#14232b; --muted:#5b6b73; --line:#d5dfe0; --bg:#eef3f2; --card:#ffffff;
+    --accent:#0f7a5c; --accent-ink:#ffffff; --warn:#a8650c; --warn-bg:#fdf1dc;
+    --bad:#b3261e; --bad-bg:#fbe5e3; --ok-bg:#dff3ea; --info-bg:#e3eef5;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#e6eef0; --muted:#97a8af; --line:#2c3d45; --bg:#0f1a1f; --card:#16252c;
+      --accent:#35b88d; --accent-ink:#06231a; --warn:#e8b25c; --warn-bg:#3a2c12;
+      --bad:#f08a82; --bad-bg:#3d1b18; --ok-bg:#12382c; --info-bg:#17303d;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+  header{background:var(--ink);color:var(--bg);padding:18px 24px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  @media (prefers-color-scheme: dark){ header{background:#0a1216;color:#e6eef0} }
+  header h1{margin:0;font-size:1.25rem;font-weight:700;letter-spacing:.01em}
+  header p{margin:0;font-size:.85rem;opacity:.75}
+  .wallet{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  main{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+  nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  nav button{background:transparent;border:1px solid var(--line);color:var(--ink);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.92rem}
+  nav button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  @media (prefers-color-scheme: dark){ nav button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)} }
+  section.tab{display:block}
+  h3.sec{margin:26px 0 10px;font-size:1.05rem;color:var(--muted);font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px;margin-bottom:16px}
+  .card h2{margin:0 0 4px;font-size:1.05rem}
+  .card .hint{margin:0 0 14px;color:var(--muted);font-size:.88rem}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .stat{border-left:4px solid var(--accent);padding:4px 12px}
+  .stat b{display:block;font-size:1.35rem}
+  .stat span{color:var(--muted);font-size:.85rem}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px}
+  input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-size:.95rem}
+  input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row > div{flex:1 1 160px}
+  button.btn{background:var(--accent);color:var(--accent-ink);border:0;padding:10px 16px;border-radius:6px;font-weight:600;cursor:pointer;font-size:.92rem}
+  button.btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  button.btn.danger{background:var(--bad);color:#fff}
+  button.btn:disabled{opacity:.45;cursor:not-allowed}
+  .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.8rem;font-weight:600}
+  .b-ok{background:var(--ok-bg);color:var(--accent)}
+  .b-warn{background:var(--warn-bg);color:var(--warn)}
+  .b-bad{background:var(--bad-bg);color:var(--bad)}
+  .b-info{background:var(--info-bg);color:var(--muted)}
+  .timer{font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums}
+  table{width:100%;border-collapse:collapse;font-size:.88rem}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:600}
+  .scroll{overflow-x:auto}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem}
+  #log{max-height:240px;overflow:auto;font-size:.85rem}
+  #log div{padding:6px 0;border-bottom:1px solid var(--line)}
+  #log .err{color:var(--bad)} #log .good{color:var(--accent)}
+  a{color:var(--accent)}
+  .note{background:var(--info-bg);padding:10px 12px;border-radius:6px;font-size:.88rem;margin-bottom:14px}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>SupplierCompliance</h1>
+    <p>Supplier registration and compliance for humanitarian supply chains (Sepolia)</p>
+  </div>
+  <div class="wallet">
+    <span id="roleBadge" class="badge b-info">Not connected</span>
+    <span id="acct" class="mono"></span>
+    <button class="btn" id="connectBtn">Connect wallet</button>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="row">
+      <div style="flex:3 1 320px">
+        <label for="addr" style="margin-top:0">Contract address</label>
+        <input id="addr" class="mono" value="0x82b4E78f166ccaF4f88f2FAD3A5a49E2Cb2886b0" spellcheck="false">
+      </div>
+      <div style="flex:0 0 auto"><button class="btn alt" id="loadBtn">Load contract</button></div>
+    </div>
+    <p class="hint" style="margin:10px 0 0">Network must be Sepolia. If you redeploy, paste the new address here.</p>
+  </div>
+
+  <div class="card" id="quick">
+    <h2>Quick actions</h2>
+    <p class="hint">Connect first, then use these shortcuts.</p>
+    <div class="row">
+      <div style="flex:0 0 auto"><button class="btn" id="qConnect">Connect wallet</button></div>
+      <div style="flex:0 0 auto"><button class="btn alt" id="qRole">Check my role</button></div>
+      <div style="flex:0 0 auto"><button class="btn alt" id="qRes">My resources</button></div>
+      <div style="flex:0 0 auto"><button class="btn alt" id="qComp">Check my compliance</button></div>
+    </div>
+    <div id="noWallet" class="note hidden" style="margin:14px 0 0"></div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <h3 class="sec">Overview</h3>
+  <section class="tab" id="tab-overview">
+    <div class="card">
+      <h2>Rules</h2>
+      <p class="hint">Current values set by the admin.</p>
+      <div class="grid">
+        <div class="stat"><b id="ruleFee">-</b><span>Registration fee</span></div>
+        <div class="stat"><b id="rulePen">-</b><span>Penalty to reactivate</span></div>
+        <div class="stat"><b id="ruleInt">-</b><span>Update window</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Statistics</h2>
+      <p class="hint">Live from <span class="mono">getStatistics()</span>.</p>
+      <div class="grid">
+        <div class="stat"><b id="stTotal">-</b><span>Total suppliers</span></div>
+        <div class="stat"><b id="stActive">-</b><span>Active suppliers</span></div>
+        <div class="stat"><b id="stInactive">-</b><span>Deactivated suppliers</span></div>
+        <div class="stat"><b id="stRes">-</b><span>Resource entries</span></div>
+        <div class="stat"><b id="stViol">-</b><span>Violations</span></div>
+        <div class="stat"><b id="stPen">-</b><span>Penalties collected</span></div>
+        <div class="stat"><b id="stBal">-</b><span>Contract balance</span></div>
+      </div>
+      <p style="margin-bottom:0"><button class="btn alt" id="refreshStats">Refresh</button></p>
+    </div>
+  </section>
+
+  <!-- MY SUPPLIER -->
+  <h3 class="sec">Supplier</h3>
+  <section class="tab" id="tab-supplier">
+    <div class="card">
+      <h2>My status</h2>
+      <p class="hint">Your wallet's supplier record.</p>
+      <div id="myStatus" class="note">Connect your wallet to see your status.</div>
+      <div id="myDetails" class="hidden">
+        <div class="grid">
+          <div><div style="color:var(--muted);font-size:.85rem">Name</div><b id="myName"></b></div>
+          <div><div style="color:var(--muted);font-size:.85rem">Status</div><span id="myBadge" class="badge"></span></div>
+          <div><div style="color:var(--muted);font-size:.85rem">Time left to update</div><div class="timer" id="myTimer">-</div></div>
+          <div><div style="color:var(--muted);font-size:.85rem">Violations / penalties paid</div><b id="myViol">-</b></div>
+          <div><div style="color:var(--muted);font-size:.85rem">Registered</div><span id="myReg">-</span></div>
+          <div><div style="color:var(--muted);font-size:.85rem">Last update</div><span id="myLast">-</span></div>
+        </div>
+      </div>
+      <p style="margin-bottom:0"><button class="btn alt" id="refreshMine">Refresh my status</button></p>
+    </div>
+
+    <div class="card" id="regCard">
+      <h2>Register as a supplier</h2>
+      <p class="hint">You pay the exact registration fee (<span class="regFeeText">-</span>) with this transaction.</p>
+      <label for="regName">Supplier name</label>
+      <input id="regName" placeholder="e.g. Alpha Relief">
+      <p><button class="btn" id="regBtn">Register and pay fee</button></p>
+    </div>
+
+    <div class="card" id="penCard">
+      <h2>Pay penalty</h2>
+      <p class="hint">Your supplier was deactivated for missing the update deadline. Pay <span class="penText">-</span> to reactivate and start a fresh window.</p>
+      <button class="btn danger" id="penBtn">Pay penalty</button>
+    </div>
+
+    <div class="card" id="resCard">
+      <h2>Add a resource</h2>
+      <p class="hint">Declare something you can supply. Adding a resource also resets your update deadline.</p>
+      <div class="row">
+        <div><label for="rName">Resource name</label><input id="rName" placeholder="Rice"></div>
+        <div><label for="rUnit">Unit</label><input id="rUnit" placeholder="kg"></div>
+        <div><label for="rQty">Quantity</label><input id="rQty" type="number" min="1" placeholder="500"></div>
+        <div style="flex:0 0 auto"><button class="btn" id="addResBtn">Add resource</button></div>
+      </div>
+    </div>
+
+    <div class="card" id="updCard">
+      <h2>Update a quantity</h2>
+      <p class="hint">Change the quantity of a resource you already declared. This also resets your deadline.</p>
+      <div class="row">
+        <div><label for="uId">Resource ID</label><input id="uId" type="number" min="1" placeholder="1"></div>
+        <div><label for="uQty">New quantity</label><input id="uQty" type="number" min="0" placeholder="450"></div>
+        <div style="flex:0 0 auto"><button class="btn" id="updBtn">Update quantity</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>My resources</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Quantity</th><th>Last updated</th></tr></thead>
+        <tbody id="myResBody"><tr><td colspan="5">Nothing to show yet.</td></tr></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- COMPLIANCE -->
+  <h3 class="sec">Compliance</h3>
+  <section class="tab" id="tab-compliance">
+    <div class="card">
+      <h2>Look up a supplier</h2>
+      <p class="hint">Anyone can look up a supplier. If the supplier missed the deadline, run the compliance check to deactivate them and record a violation.</p>
+      <label for="cAddr">Supplier wallet address</label>
+      <input id="cAddr" class="mono" placeholder="0x..." spellcheck="false">
+      <p class="row" style="margin-top:12px">
+        <button class="btn alt" id="viewSupBtn">View supplier</button>
+        <button class="btn" id="chkBtn">Run compliance check (transaction)</button>
+      </p>
+      <div id="supView"></div>
+    </div>
+  </section>
+
+  <!-- ADMIN -->
+  <h3 class="sec">Admin</h3>
+  <section class="tab" id="tab-admin">
+    <div id="adminLock" class="note">These controls only work for the admin wallet (the address that deployed the contract). Connect it to continue.</div>
+    <div id="adminBody">
+      <div class="card">
+        <h2>Check all suppliers</h2>
+        <p class="hint">Deactivates every supplier that missed their deadline, in one transaction.</p>
+        <button class="btn" id="chkAllBtn">Check all suppliers</button>
+      </div>
+
+      <div class="card">
+        <h2>Change rules</h2>
+        <p class="hint">Fees and penalty are entered in ETH. The update window is in seconds.</p>
+        <div class="row">
+          <div><label for="nFee">Registration fee (ETH)</label><input id="nFee" placeholder="0.001"></div>
+          <div style="flex:0 0 auto"><button class="btn" id="setFeeBtn">Set fee</button></div>
+        </div>
+        <div class="row">
+          <div><label for="nPen">Penalty (ETH)</label><input id="nPen" placeholder="0.002"></div>
+          <div style="flex:0 0 auto"><button class="btn" id="setPenBtn">Set penalty</button></div>
+        </div>
+        <div class="row">
+          <div><label for="nInt">Update window (seconds)</label><input id="nInt" type="number" min="1" placeholder="180"></div>
+          <div style="flex:0 0 auto"><button class="btn" id="setIntBtn">Set window</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Withdraw funds</h2>
+        <p class="hint">Collected fees and penalties go to the admin wallet. Contract balance: <b id="wdBal">-</b></p>
+        <div class="row">
+          <div><label for="wdAmt">Amount (ETH)</label><input id="wdAmt" placeholder="0.001"></div>
+          <div style="flex:0 0 auto"><button class="btn" id="wdBtn">Withdraw</button></div>
+          <div style="flex:0 0 auto"><button class="btn alt" id="wdAllBtn">Withdraw all</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Supplier matrix</h2>
+        <p class="hint">Every registered supplier with their current standing.</p>
+        <p class="row"><button class="btn alt" id="matrixBtn">Refresh matrix</button>
+        <button class="btn alt" id="csvBtn">Download CSV</button></p>
+        <div class="scroll"><table>
+          <thead><tr><th>#</th><th>Name</th><th>Wallet</th><th>Status</th><th>Resources</th><th>Violations</th><th>Penalties paid (ETH)</th><th>Time left</th></tr></thead>
+          <tbody id="matrixBody"><tr><td colspan="8">Press Refresh matrix.</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+
+  <h3 class="sec">History</h3>
+  <div class="card">
+    <h2>On-chain event history</h2>
+    <p class="hint">Registrations, resource updates, compliance checks, penalties, rule changes and withdrawals from the last ~50,000 blocks.</p>
+    <p><button class="btn alt" id="evBtn">Load events</button></p>
+    <div class="scroll"><table>
+      <thead><tr><th>Block</th><th>Event</th><th>Details</th></tr></thead>
+      <tbody id="evBody"><tr><td colspan="3">Press Load events.</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <h2>Activity</h2>
+    <p class="hint">Transactions and errors from this session. If something reverts, the reason from the contract shows here.</p>
+    <div id="log"></div>
+  </div>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  const SEPOLIA_ID = 11155111n;
+  const ETHERSCAN = "https://sepolia.etherscan.io";
+
+  const SUPPLIER_T = "tuple(string name,bool isRegistered,bool isActive,uint256 registeredAt,uint256 lastUpdateTime,uint256 violationCount,uint256 resourceCount,uint256 penaltiesPaid)";
+  const RESOURCE_T = "tuple(string name,string unit,uint256 quantity,uint256 lastUpdated,bool exists)";
+
+  const ABI = [
+    "function admin() view returns (address)",
+    "function registrationFee() view returns (uint256)",
+    "function penaltyAmount() view returns (uint256)",
+    "function updateInterval() view returns (uint256)",
+    "function registerSupplier(string _name) payable",
+    "function addResource(string _name,string _unit,uint256 _quantity)",
+    "function updateQuantity(uint256 _resourceId,uint256 _newQuantity)",
+    "function payPenalty() payable",
+    "function checkCompliance(address _supplier) returns (bool)",
+    "function checkAllSuppliers()",
+    "function setRegistrationFee(uint256 _fee)",
+    "function setPenaltyAmount(uint256 _penalty)",
+    "function setUpdateInterval(uint256 _seconds)",
+    "function withdrawFunds(uint256 _amount)",
+    "function getSupplier(address _supplier) view returns (" + SUPPLIER_T + ")",
+    "function getResource(address _supplier,uint256 _resourceId) view returns (" + RESOURCE_T + ")",
+    "function getSupplierList() view returns (address[])",
+    "function isCompliant(address _supplier) view returns (bool)",
+    "function timeLeft(address _supplier) view returns (uint256)",
+    "event SupplierRegistered(address indexed supplier,string name,uint256 timestamp)",
+    "event ResourceDeclared(address indexed supplier,uint256 indexed resourceId,string name,uint256 quantity,uint256 timestamp)",
+    "event QuantityUpdated(address indexed supplier,uint256 indexed resourceId,uint256 oldQuantity,uint256 newQuantity,uint256 timestamp)",
+    "event ComplianceChecked(address indexed supplier,bool compliant,uint256 timestamp)",
+    "event SupplierDeactivated(address indexed supplier,uint256 violationCount,uint256 timestamp)",
+    "event PenaltyPaid(address indexed supplier,uint256 amount,uint256 timestamp)",
+    "event SupplierReactivated(address indexed supplier,uint256 timestamp)",
+    "event RulesChanged(string rule,uint256 newValue,uint256 timestamp)",
+    "event FundsWithdrawn(address indexed to,uint256 amount,uint256 timestamp)",
+    "function getStatistics() view returns (uint256 totalSuppliers,uint256 activeSuppliers,uint256 inactiveSuppliers,uint256 resourceEntries,uint256 violations,uint256 penaltiesCollected,uint256 contractBalance)"
+  ];
+
+  const $ = id => document.getElementById(id);
+  let provider, signer, account, contract, readContract;
+  let adminAddr = null, isAdmin = false;
+  let rules = { fee: 0n, pen: 0n, interval: 0n };
+  let myDeadline = null;      // unix seconds, local estimate of deadline
+  let matrixRows = [];
+
+  /* ---------- helpers ---------- */
+  function short(a){ return a ? a.slice(0,6) + "..." + a.slice(-4) : ""; }
+  function eth(v){ return ethers.formatEther(v) + " ETH"; }
+  function when(ts){ ts = Number(ts); return ts ? new Date(ts*1000).toLocaleString() : "-"; }
+  function fmtSecs(s){
+    s = Math.max(0, Math.floor(s));
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+    return (h ? h + "h " : "") + String(m).padStart(h?2:1,"0") + "m " + String(sec).padStart(2,"0") + "s";
+  }
+  function errMsg(e){
+    if (!e) return "Unknown error";
+    if (e.code === "ACTION_REJECTED" || e.code === 4001) return "You rejected the request in your wallet.";
+    return e.reason || (e.info && e.info.error && e.info.error.message) || e.shortMessage || e.message || String(e);
+  }
+  function log(msg, cls, html){
+    const d = document.createElement("div");
+    if (cls) d.className = cls;
+    if (html) d.innerHTML = msg; else d.textContent = msg;
+    const l = $("log"); l.prepend(d);
+  }
+  function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+  function needContract(){
+    if (!contract){ log("Connect your wallet and load the contract first.", "err"); return false; }
+    return true;
+  }
+  function parseEth(v){
+    try { return ethers.parseEther(String(v).trim()); }
+    catch(e){ log("Enter a valid amount in ETH, for example 0.001.", "err"); return null; }
+  }
+  function validAddr(a){ return ethers.isAddress((a||"").trim()); }
+
+  async function send(label, fn){
+    if (!needContract()) return;
+    try {
+      log(label + ": confirm in your wallet...");
+      const tx = await fn();
+      log(label + ": sent. Waiting for confirmation... <a target='_blank' rel='noopener' href='" + ETHERSCAN + "/tx/" + tx.hash + "'>" + short(tx.hash) + "</a>", "", true);
+      const rc = await tx.wait();
+      log(label + ": confirmed in block " + rc.blockNumber + ". <a target='_blank' rel='noopener' href='" + ETHERSCAN + "/tx/" + tx.hash + "'>View on Etherscan</a>", "good", true);
+      await refreshAll();
+      return rc;
+    } catch(e){
+      console.error(e);
+      log(label + " failed: " + errMsg(e), "err");
+    }
+  }
+
+  /* ---------- wallet ---------- */
+  async function connect(){
+    if (!window.ethereum){
+      const nw = $("noWallet");
+      const here = location.href.replace(/^https?:\/\//, "");
+      nw.innerHTML = "No wallet detected in this browser. Install <a target='_blank' rel='noopener' href='https://metamask.io/download/'>MetaMask</a> and reload. On a phone, open this page inside the MetaMask app: <a href='https://metamask.app.link/dapp/" + here + "'>open in MetaMask</a>.";
+      nw.classList.remove("hidden");
+      log("No wallet found. Install MetaMask and reload this page.", "err"); return;
+    }
+    try {
+      provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      let net = await provider.getNetwork();
+      if (net.chainId !== SEPOLIA_ID){
+        try {
+          await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{ chainId:"0xaa36a7" }] });
+          provider = new ethers.BrowserProvider(window.ethereum);
+        } catch(e){
+          log("Switch your wallet to the Sepolia test network, then connect again.", "err"); return;
+        }
+      }
+      signer = await provider.getSigner();
+      account = await signer.getAddress();
+      $("acct").textContent = short(account);
+      $("connectBtn").textContent = "Connected";
+      await loadContract();
+    } catch(e){
+      log("Could not connect: " + errMsg(e), "err");
+    }
+  }
+
+  async function loadContract(){
+    const a = $("addr").value.trim();
+    if (!validAddr(a)){ log("The contract address is not valid.", "err"); return; }
+    if (!signer){ log("Connect your wallet first.", "err"); return; }
+    try {
+      const code = await provider.getCode(a);
+      if (code === "0x"){ log("No contract found at that address on this network.", "err"); return; }
+      contract = new ethers.Contract(a, ABI, signer);
+      adminAddr = await contract.admin();
+      isAdmin = adminAddr.toLowerCase() === account.toLowerCase();
+      log("Contract loaded: " + short(a) + (isAdmin ? " (you are the admin)" : ""), "good");
+      await refreshAll();
+    } catch(e){
+      log("Could not load contract: " + errMsg(e), "err");
+    }
+  }
+
+  if (window.ethereum){
+    window.ethereum.on && window.ethereum.on("accountsChanged", () => location.reload());
+    window.ethereum.on && window.ethereum.on("chainChanged", () => location.reload());
+  }
+
+  /* ---------- reads ---------- */
+  async function refreshAll(){
+    await Promise.all([loadRules(), loadStats(), loadMine()]);
+    updateRole();
+  }
+
+  async function loadRules(){
+    try {
+      const [f,p,i] = await Promise.all([contract.registrationFee(), contract.penaltyAmount(), contract.updateInterval()]);
+      rules = { fee:f, pen:p, interval:i };
+      $("ruleFee").textContent = eth(f);
+      $("rulePen").textContent = eth(p);
+      $("ruleInt").textContent = i.toString() + " seconds";
+      document.querySelectorAll(".regFeeText").forEach(e => e.textContent = eth(f));
+      document.querySelectorAll(".penText").forEach(e => e.textContent = eth(p));
+    } catch(e){ log("Could not read rules: " + errMsg(e), "err"); }
+  }
+
+  async function loadStats(){
+    if (!contract) return;
+    try {
+      const s = await contract.getStatistics();
+      $("stTotal").textContent = s.totalSuppliers.toString();
+      $("stActive").textContent = s.activeSuppliers.toString();
+      $("stInactive").textContent = s.inactiveSuppliers.toString();
+      $("stRes").textContent = s.resourceEntries.toString();
+      $("stViol").textContent = s.violations.toString();
+      $("stPen").textContent = eth(s.penaltiesCollected);
+      $("stBal").textContent = eth(s.contractBalance);
+      $("wdBal").textContent = eth(s.contractBalance);
+      $("wdBal").dataset.wei = s.contractBalance.toString();
+    } catch(e){ log("Could not read statistics: " + errMsg(e), "err"); }
+  }
+
+  function standing(s, left){
+    if (!s.isRegistered) return { text:"Not registered", cls:"b-info", key:"none" };
+    if (!s.isActive) return { text:"Deactivated", cls:"b-bad", key:"deactivated" };
+    if (left === 0n) return { text:"Overdue, awaiting check", cls:"b-warn", key:"overdue" };
+    return { text:"Active and compliant", cls:"b-ok", key:"ok" };
+  }
+
+  async function loadMine(){
+    if (!contract) return;
+    const status = $("myStatus"), det = $("myDetails");
+    ["regCard","penCard","resCard","updCard"].forEach(id => $(id).classList.add("hidden"));
+    myDeadline = null;
+    try {
+      const s = await contract.getSupplier(account);
+      const left = await contract.timeLeft(account);
+      const st = standing(s, left);
+      status.classList.add("hidden"); det.classList.remove("hidden");
+      $("myName").textContent = s.name;
+      const b = $("myBadge"); b.textContent = st.text; b.className = "badge " + st.cls;
+      $("myViol").textContent = s.violationCount.toString() + " / " + eth(s.penaltiesPaid);
+      $("myReg").textContent = when(s.registeredAt);
+      $("myLast").textContent = when(s.lastUpdateTime);
+      if (s.isActive){
+        myDeadline = Math.floor(Date.now()/1000) + Number(left);
+        $("resCard").classList.remove("hidden"); $("updCard").classList.remove("hidden");
+      } else {
+        $("penCard").classList.remove("hidden");
+        $("myTimer").textContent = "-";
+      }
+      if (st.key === "overdue"){
+        status.classList.remove("hidden");
+        status.textContent = "Your update deadline passed. You cannot update until someone runs a compliance check, which will deactivate you. Then pay the penalty to come back.";
+      }
+      // resources
+      const n = Number(s.resourceCount);
+      const rows = [];
+      for (let i = 1; i <= n; i++){
+        const r = await contract.getResource(account, i);
+        rows.push("<tr><td>" + i + "</td><td>" + esc(r.name) + "</td><td>" + esc(r.unit) + "</td><td>" + r.quantity.toString() + "</td><td>" + when(r.lastUpdated) + "</td></tr>");
+      }
+      $("myResBody").innerHTML = rows.length ? rows.join("") : "<tr><td colspan='5'>You have not declared any resources yet.</td></tr>";
+    } catch(e){
+      // not registered
+      det.classList.add("hidden");
+      status.classList.remove("hidden");
+      status.textContent = isAdmin
+        ? "This is the admin wallet. It is not registered as a supplier. Use a different wallet to register."
+        : "This wallet is not registered as a supplier yet.";
+      $("regCard").classList.remove("hidden");
+      $("myResBody").innerHTML = "<tr><td colspan='5'>Nothing to show yet.</td></tr>";
+    }
+  }
+
+  function updateRole(){
+    const b = $("roleBadge");
+    if (!account){ b.textContent = "Not connected"; b.className = "badge b-info"; return; }
+    if (isAdmin){ b.textContent = "Admin"; b.className = "badge b-ok"; }
+    else { b.textContent = "Visitor or supplier"; b.className = "badge b-info"; }
+    $("adminLock").classList.toggle("hidden", isAdmin);
+    $("adminBody").classList.toggle("hidden", !isAdmin);
+  }
+
+  setInterval(() => {
+    if (myDeadline === null) return;
+    const left = myDeadline - Math.floor(Date.now()/1000);
+    $("myTimer").textContent = left > 0 ? fmtSecs(left) : "0m 00s";
+  }, 1000);
+
+  /* ---------- compliance lookup ---------- */
+  async function viewSupplier(){
+    if (!needContract()) return;
+    const a = $("cAddr").value.trim();
+    if (!validAddr(a)){ log("Enter a valid wallet address.", "err"); return; }
+    const out = $("supView");
+    try {
+      const s = await contract.getSupplier(a);
+      const left = await contract.timeLeft(a);
+      const comp = await contract.isCompliant(a);
+      const st = standing(s, left);
+      let html = "<div class='grid' style='margin-top:14px'>" +
+        "<div><div style='color:var(--muted);font-size:.85rem'>Name</div><b>" + esc(s.name) + "</b></div>" +
+        "<div><div style='color:var(--muted);font-size:.85rem'>Status</div><span class='badge " + st.cls + "'>" + st.text + "</span></div>" +
+        "<div><div style='color:var(--muted);font-size:.85rem'>isCompliant()</div><b>" + comp + "</b></div>" +
+        "<div><div style='color:var(--muted);font-size:.85rem'>Time left</div><b>" + fmtSecs(Number(left)) + "</b></div>" +
+        "<div><div style='color:var(--muted);font-size:.85rem'>Violations</div><b>" + s.violationCount.toString() + "</b></div>" +
+        "<div><div style='color:var(--muted);font-size:.85rem'>Penalties paid</div><b>" + eth(s.penaltiesPaid) + "</b></div>" +
+        "<div><div style='color:var(--muted);font-size:.85rem'>Last update</div>" + when(s.lastUpdateTime) + "</div>" +
+        "</div>";
+      const n = Number(s.resourceCount);
+      html += "<div class='scroll' style='margin-top:14px'><table><thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Quantity</th><th>Last updated</th></tr></thead><tbody>";
+      if (!n) html += "<tr><td colspan='5'>No resources declared.</td></tr>";
+      for (let i = 1; i <= n; i++){
+        const r = await contract.getResource(a, i);
+        html += "<tr><td>" + i + "</td><td>" + esc(r.name) + "</td><td>" + esc(r.unit) + "</td><td>" + r.quantity.toString() + "</td><td>" + when(r.lastUpdated) + "</td></tr>";
+      }
+      html += "</tbody></table></div>";
+      out.innerHTML = html;
+    } catch(e){
+      out.innerHTML = "";
+      log("View supplier failed: " + errMsg(e), "err");
+    }
+  }
+
+  /* ---------- matrix ---------- */
+  async function loadMatrix(){
+    if (!needContract()) return;
+    try {
+      const list = await contract.getSupplierList();
+      matrixRows = [];
+      const html = [];
+      for (let i = 0; i < list.length; i++){
+        const a = list[i];
+        const s = await contract.getSupplier(a);
+        const left = await contract.timeLeft(a);
+        const st = standing(s, left);
+        matrixRows.push([i+1, s.name, a, st.text, s.resourceCount.toString(), s.violationCount.toString(), ethers.formatEther(s.penaltiesPaid), left.toString()]);
+        html.push("<tr><td>" + (i+1) + "</td><td>" + esc(s.name) + "</td><td class='mono' title='" + a + "'>" + short(a) +
+          "</td><td><span class='badge " + st.cls + "'>" + st.text + "</span></td><td>" + s.resourceCount + "</td><td>" + s.violationCount +
+          "</td><td>" + ethers.formatEther(s.penaltiesPaid) + "</td><td>" + (s.isActive ? fmtSecs(Number(left)) : "-") + "</td></tr>");
+      }
+      $("matrixBody").innerHTML = html.length ? html.join("") : "<tr><td colspan='8'>No suppliers registered yet.</td></tr>";
+    } catch(e){ log("Could not load matrix: " + errMsg(e), "err"); }
+  }
+  function downloadCsv(){
+    if (!matrixRows.length){ log("Refresh the matrix first, there is nothing to export.", "err"); return; }
+    const head = ["#","Name","Wallet","Status","Resources","Violations","PenaltiesPaidETH","SecondsLeft"];
+    const csv = [head].concat(matrixRows).map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+    a.download = "supplier-matrix.csv"; a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* ---------- wiring ---------- */
+  $("connectBtn").onclick = connect;
+  $("loadBtn").onclick = loadContract;
+  $("refreshStats").onclick = loadStats;
+  $("refreshMine").onclick = loadMine;
+  $("viewSupBtn").onclick = viewSupplier;
+  $("matrixBtn").onclick = loadMatrix;
+  $("csvBtn").onclick = downloadCsv;
+
+  $("qConnect").onclick = connect;
+  $("qRole").onclick = async () => {
+    if (!needContract()) return;
+    if (isAdmin){ log("Role: Admin (deployer wallet).", "good"); return; }
+    try {
+      const s = await contract.getSupplier(account);
+      const left = await contract.timeLeft(account);
+      log("Role: Supplier \"" + s.name + "\" - " + standing(s, left).text + ".", "good");
+    } catch(e){ log("Role: not registered. Use the Register form below.", ""); }
+  };
+  $("qRes").onclick = async () => {
+    if (!needContract()) return;
+    await loadMine();
+    $("myResBody").scrollIntoView({behavior:"smooth", block:"center"});
+  };
+  $("qComp").onclick = () => {
+    if (!needContract()) return;
+    send("Compliance check", () => contract.checkCompliance(account));
+  };
+
+  async function loadEvents(){
+    if (!needContract()) return;
+    try {
+      const latest = await provider.getBlockNumber();
+      const logs = await provider.getLogs({ address: contract.target, fromBlock: Math.max(0, latest - 50000), toBlock: "latest" });
+      const rows = [];
+      for (const l of logs.slice().reverse().slice(0, 60)){
+        let pl; try { pl = contract.interface.parseLog(l); } catch(e){ continue; }
+        if (!pl) continue;
+        const d = pl.fragment.inputs.map((inp, i) => {
+          let v = pl.args[i];
+          if (inp.name === "timestamp") v = when(v);
+          else if (inp.type === "address") v = short(v);
+          else if (inp.name === "amount" || inp.name === "newValue" && pl.args[0] !== "updateInterval" && pl.args[0] !== "") v = v.toString();
+          return inp.name + ": " + v.toString();
+        }).join(", ");
+        rows.push("<tr><td>" + l.blockNumber + "</td><td>" + pl.name + "</td><td>" + esc(d) + "</td></tr>");
+      }
+      $("evBody").innerHTML = rows.length ? rows.join("") : "<tr><td colspan='3'>No events in the recent block range.</td></tr>";
+    } catch(e){ log("Could not load events: " + errMsg(e), "err"); }
+  }
+  $("evBtn").onclick = loadEvents;
+
+  $("regBtn").onclick = () => {
+    const n = $("regName").value.trim();
+    if (!n){ log("Enter a supplier name.", "err"); return; }
+    send("Register supplier", () => contract.registerSupplier(n, { value: rules.fee }));
+  };
+  $("penBtn").onclick = () => send("Pay penalty", () => contract.payPenalty({ value: rules.pen }));
+  $("addResBtn").onclick = () => {
+    const n = $("rName").value.trim(), u = $("rUnit").value.trim(), q = $("rQty").value;
+    if (!n){ log("Enter a resource name.", "err"); return; }
+    if (!q || Number(q) <= 0){ log("Quantity must be greater than zero.", "err"); return; }
+    send("Add resource", () => contract.addResource(n, u, BigInt(q)));
+  };
+  $("updBtn").onclick = () => {
+    const id = $("uId").value, q = $("uQty").value;
+    if (!id || Number(id) < 1){ log("Enter a valid resource ID (1, 2, 3...).", "err"); return; }
+    if (q === "" || Number(q) < 0){ log("Enter the new quantity.", "err"); return; }
+    send("Update quantity", () => contract.updateQuantity(BigInt(id), BigInt(q)));
+  };
+  $("chkBtn").onclick = () => {
+    const a = $("cAddr").value.trim();
+    if (!validAddr(a)){ log("Enter a valid wallet address.", "err"); return; }
+    send("Compliance check", () => contract.checkCompliance(a)).then(() => viewSupplier());
+  };
+  $("chkAllBtn").onclick = () => send("Check all suppliers", () => contract.checkAllSuppliers());
+  $("setFeeBtn").onclick = () => { const v = parseEth($("nFee").value); if (v !== null) send("Set registration fee", () => contract.setRegistrationFee(v)); };
+  $("setPenBtn").onclick = () => { const v = parseEth($("nPen").value); if (v !== null) send("Set penalty", () => contract.setPenaltyAmount(v)); };
+  $("setIntBtn").onclick = () => {
+    const v = $("nInt").value;
+    if (!v || Number(v) <= 0){ log("The window must be greater than zero seconds.", "err"); return; }
+    send("Set update window", () => contract.setUpdateInterval(BigInt(v)));
+  };
+  $("wdBtn").onclick = () => { const v = parseEth($("wdAmt").value); if (v !== null) send("Withdraw funds", () => contract.withdrawFunds(v)); };
+  $("wdAllBtn").onclick = () => {
+    const w = $("wdBal").dataset.wei;
+    if (!w || w === "0"){ log("The contract balance is zero.", "err"); return; }
+    send("Withdraw all funds", () => contract.withdrawFunds(BigInt(w)));
+  };
+})();
+</script>
+</body>
+</html>
